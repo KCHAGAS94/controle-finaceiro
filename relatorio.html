@@ -17,18 +17,13 @@
       color: #2c3e50;
     }
 
-    .compra-box {
-      background: white;
-      margin: 20px auto;
+    .card {
+      background: #fff;
       padding: 20px;
-      max-width: 800px;
       border-radius: 8px;
-      box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
-    }
-
-    .compra-box h3 {
-      margin-top: 0;
-      color: #27ae60;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+      margin: 20px auto;
+      max-width: 800px;
     }
 
     table {
@@ -48,19 +43,25 @@
       color: white;
     }
 
-    .total {
-      text-align: right;
+    .delete-btn {
       margin-top: 10px;
-      font-weight: bold;
-      color: #2c3e50;
+      background-color: #e74c3c;
+      color: white;
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .delete-btn:hover {
+      background-color: #c0392b;
     }
   </style>
 </head>
 <body>
+
   <h1>Relatório de Compras</h1>
-  <div id="comprasContainer">
-    <p>Carregando compras...</p>
-  </div>
+  <div id="comprasContainer">Carregando compras...</div>
 
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
@@ -73,29 +74,28 @@
     firebase.firestore().collection("compras").orderBy("createdAt", "desc").get()
       .then(snapshot => {
         if (snapshot.empty) {
-          container.innerHTML = "<p>Nenhuma compra encontrada.</p>";
+          container.innerHTML = "<h1>Nenhuma compra encontrada.</h1>";
           return;
         }
 
-        container.innerHTML = ''; // Limpa a mensagem de carregamento
+        container.innerHTML = ''; // Limpa a mensagem de "Carregando..."
 
         snapshot.forEach(doc => {
           const data = doc.data();
           const produtos = data.produtos || [];
-
-          const total = produtos.reduce((acc, p) => acc + (p.totalPrice || 0), 0);
+          const total = produtos.reduce((acc, p) => acc + p.totalPrice, 0);
 
           const div = document.createElement("div");
-          div.classList.add("compra-box");
+          div.classList.add("card");
 
-          let tabela = `
+          let tableHTML = `
             <h3>🛒 ${data.market} - ${data.date}</h3>
             <table>
               <thead>
                 <tr>
                   <th>Produto</th>
                   <th>Marca</th>
-                  <th>Quantidade</th>
+                  <th>Qtd</th>
                   <th>Unitário (R$)</th>
                   <th>Total (R$)</th>
                 </tr>
@@ -105,7 +105,7 @@
 
           if (produtos.length > 0) {
             produtos.forEach(prod => {
-              tabela += `
+              tableHTML += `
                 <tr>
                   <td>${prod.name}</td>
                   <td>${prod.brand}</td>
@@ -116,26 +116,37 @@
               `;
             });
           } else {
-            tabela += `
-              <tr>
-                <td colspan="5">Nenhum produto registrado.</td>
-              </tr>
-            `;
+            tableHTML += `<tr><td colspan="5">Nenhum produto adicionado.</td></tr>`;
           }
 
-          tabela += `
+          tableHTML += `
               </tbody>
             </table>
-            <div class="total">Total da compra: R$ ${total.toFixed(2)}</div>
+            <p><strong>Total da compra: R$ ${total.toFixed(2)}</strong></p>
+            <button class="delete-btn" onclick="excluirCompra('${doc.id}')">Excluir</button>
           `;
 
-          div.innerHTML = tabela;
+          div.innerHTML = tableHTML;
           container.appendChild(div);
         });
       })
       .catch(err => {
         container.innerHTML = `<p>Erro ao carregar compras: ${err.message}</p>`;
       });
+
+    function excluirCompra(id) {
+      if (confirm("Tem certeza que deseja excluir esta compra?")) {
+        firebase.firestore().collection("compras").doc(id).delete()
+          .then(() => {
+            alert("Compra excluída com sucesso.");
+            location.reload();
+          })
+          .catch(err => {
+            alert("Erro ao excluir: " + err.message);
+          });
+      }
+    }
   </script>
+
 </body>
 </html>

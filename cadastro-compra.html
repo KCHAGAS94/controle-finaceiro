@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Controle de Compra Supermercado</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f4f4f4;
+      color: #333;
+    }
+
+    h1 {
+      text-align: center;
+      color: #2c3e50;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    form {
+      max-width: 600px;
+      margin: 20px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+
+    label {
+      display: block;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    input[type="text"], input[type="number"], input[type="date"] {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      box-sizing: border-box;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 10px 15px;
+      font-size: 16px;
+      background-color: #27ae60;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #219150;
+    }
+
+    .summary {
+      max-width: 600px;
+      margin: 20px auto;
+      font-weight: bold;
+      font-size: 18px;
+      background: white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+
+    table {
+      max-width: 600px;
+      margin: 20px auto;
+      border-collapse: collapse;
+      width: 100%;
+      background: white;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
+    }
+
+    th {
+      background-color: #27ae60;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Cadastrando compras</h1>
+
+  <!-- Tela inicial para pegar data e supermercado -->
+  <form id="startForm">
+    <label for="date">Data da compra:</label>
+    <input type="date" id="date" required />
+
+    <label for="market">Supermercado:</label>
+    <input type="text" id="market" placeholder="Nome do supermercado" required />
+
+    <button type="submit">Começar</button>
+  </form>
+
+  <!-- Formulário de adicionar produtos (escondido no início) -->
+  <div id="mainApp" class="hidden">
+    <div class="summary" id="summary">
+      Produtos adicionados: 0 | Valor total: R$ 0,00
+    </div>
+
+    <form id="productForm">
+      <label for="productName">Nome do produto:</label>
+      <input type="text" id="productName" required />
+
+      <label for="brand">Marca:</label>
+      <input type="text" id="brand" required />
+
+      <label for="quantity">Quantidade:</label>
+      <input type="number" id="quantity" min="1" value="1" required />
+
+      <label for="unitPrice">Valor unitário (R$):</label>
+      <input type="number" id="unitPrice" min="0.01" step="0.01" value="0.00" required />
+
+      <button type="submit">Adicionar Produto</button>
+    </form>
+
+    <table id="productsTable">
+      <thead>
+        <tr>
+          <th>Produto</th>
+          <th>Marca</th>
+          <th>Quantidade</th>
+          <th>Valor Unitário (R$)</th>
+          <th>Valor Total (R$)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Produtos adicionados aparecem aqui -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+
+  <script src="firebase.js"></script>
+  <script>
+    
+const startForm = document.getElementById('startForm')
+const mainApp = document.getElementById('mainApp')
+const summary = document.getElementById('summary')
+const productForm = document.getElementById('productForm')
+const productsTableBody = document.querySelector('#productsTable tbody')
+
+let products = []
+let compraId = null // ID da compra criada no Firestore
+
+startForm.addEventListener('submit', async e => {
+  e.preventDefault()
+
+  const date = document.getElementById('date').value
+  const market = document.getElementById('market').value.trim()
+
+  if (!date || !market) {
+    alert('Por favor, preencha a data e o supermercado.')
+    return
+  }
+
+  try {
+    // Cria um novo documento da compra no Firestore
+    const docRef = await db.collection('compras').add({
+      date,
+      market,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    })
+
+    compraId = docRef.id
+
+    // Mostra o formulário principal
+    startForm.classList.add('hidden')
+    mainApp.classList.remove('hidden')
+
+  } catch (error) {
+    alert('Erro ao iniciar a compra: ' + error.message)
+  }
+})
+
+productForm.addEventListener('submit', async e => {
+  e.preventDefault()
+
+  if (!compraId) {
+    alert('Erro: compra ainda não iniciada.')
+    return
+  }
+
+  const name = document.getElementById('productName').value.trim()
+  const brand = document.getElementById('brand').value.trim()
+  const quantity = parseInt(document.getElementById('quantity').value)
+  const unitPrice = parseFloat(document.getElementById('unitPrice').value)
+
+  if (!name || !brand || quantity <= 0 || unitPrice <= 0) {
+    alert('Preencha todos os campos corretamente.')
+    return
+  }
+
+  const totalPrice = quantity * unitPrice
+  const produto = { name, brand, quantity, unitPrice, totalPrice }
+
+  try {
+    // Adiciona o produto ao subcoleção 'produtos' da compra
+    await db.collection('compras').doc(compraId).collection('produtos').add(produto)
+
+    // Atualiza UI local
+    products.push(produto)
+    updateUI()
+
+    productForm.reset()
+    document.getElementById('quantity').value = 1
+    document.getElementById('unitPrice').value = '0.00'
+
+  } catch (error) {
+    alert('Erro ao salvar produto: ' + error.message)
+  }
+})
+
+function updateUI() {
+  productsTableBody.innerHTML = ''
+  products.forEach(prod => {
+    const tr = document.createElement('tr')
+    tr.innerHTML = `
+      <td>${prod.name}</td>
+      <td>${prod.brand}</td>
+      <td>${prod.quantity}</td>
+      <td>R$ ${prod.unitPrice.toFixed(2)}</td>
+      <td>R$ ${prod.totalPrice.toFixed(2)}</td>
+    `
+    productsTableBody.appendChild(tr)
+  })
+
+  const totalQuantity = products.reduce((acc, prod) => acc + prod.quantity, 0)
+  const totalValue = products.reduce((acc, prod) => acc + prod.totalPrice, 0)
+
+  summary.textContent = `Produtos adicionados: ${totalQuantity} | Valor total: R$ ${totalValue.toFixed(2)}`
+}
+
+  </script>
+</body>
+</html>

@@ -128,13 +128,6 @@
       width: 100%;
       box-sizing: border-box;
     }
-
-    .search input[type="text"] {
-      width: 100%;
-      padding: 8px;
-      margin-top: 4px;
-      box-sizing: border-box;
-    }
   </style>
 </head>
 <body>
@@ -167,7 +160,7 @@
     <input type="number" id="quantity" min="1" value="1" required />
 
     <label for="unitPrice">Valor unitário (R$):</label>
-    <input type="text" id="unitPrice" value="0,00" required />
+    <input type="text" id="unitPrice" placeholder="0,00" required />
 
     <button type="submit">Adicionar Produto</button>
   </form>
@@ -175,6 +168,8 @@
   <div class="search">
     <label for="searchInput">Procurar produto:</label>
     <input type="text" id="searchInput" placeholder="Pesquisar produto..." />
+
+    <button type="submit">Adicionar Produto</button>
   </div>
 
   <h1>Lista de compra</h1>
@@ -328,7 +323,7 @@
 
     productForm.reset();
     document.getElementById('quantity').value = 1;
-    document.getElementById('unitPrice').value = '0.00';
+    document.getElementById('unitPrice').value = '';
   });
 
   // Função para remover produto
@@ -341,15 +336,17 @@
     updateUI();
   }
 
-  // Função para procurar produto
-  searchInput.addEventListener('input', () => {
-    const searchTerm = searchInput.value.toLowerCase();
-    const filteredProducts = products.filter(prod => 
-      prod.name.toLowerCase().includes(searchTerm) || 
-      prod.brand.toLowerCase().includes(searchTerm)
-    );
-    productsTableBody.innerHTML = '';
-    filteredProducts.forEach((prod, index) => adicionarNaTabela(prod, index));
+  // Formatação do valor unitário com vírgula
+  const unitPriceInput = document.getElementById('unitPrice');
+  unitPriceInput.addEventListener('input', () => {
+    let value = unitPriceInput.value.replace(/\D/g, ''); // Remove tudo que não for número
+    if (value.length > 2) {
+      const cents = value.slice(-2); // Pega os últimos 2 caracteres como centavos
+      const reais = value.slice(0, -2); // Pega o restante como reais
+      unitPriceInput.value = `${reais}${reais ? ',' : ''}${cents}`;
+    } else {
+      unitPriceInput.value = value; // Caso a quantidade seja menor que 3 dígitos, apenas exibe
+    }
   });
 
   // Lógica para inicializar a compra e carregar produtos existentes
@@ -388,11 +385,11 @@
 
       startForm.classList.add('hidden');
       mainApp.classList.remove('hidden');
-
     } catch (err) {
       alert("Erro ao buscar ou criar compra: " + err.message);
     }
   });
 </script>
+
 </body>
 </html>

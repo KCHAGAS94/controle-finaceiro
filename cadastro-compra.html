@@ -183,9 +183,18 @@ async function atualizarStatusProduto(produto, checked, index) {
   await compraRef.collection('produtos').doc(produto.docId).update({
     pego: checked
   });
-  
+
   // Atualiza o estado do produto na lista
   products[index].pego = checked;
+
+  // Ordena a lista de produtos (primeiro os não marcados, depois os marcados)
+  products = products.sort((a, b) => {
+    if (a.pego === b.pego) {
+      return a.name.localeCompare(b.name); // Ordena alfabeticamente quando os status são iguais
+    }
+    return a.pego ? 1 : -1; // Move os produtos "pegos" para o final
+  });
+
   updateUI();
 }
 
@@ -203,7 +212,7 @@ function adicionarNaTabela(produto, index) {
     <td>R$ ${produto.totalPrice.toFixed(2)}</td>
     <td><button class="delete-btn" onclick="removerProduto('${produto.docId}', ${index})">Excluir</button></td>
   `;
-  
+
   // Adiciona evento para atualizar status do produto
   tr.querySelector('.status').addEventListener('change', (e) => {
     const checked = e.target.checked;
@@ -233,6 +242,15 @@ function updateUI() {
 async function loadExistingProducts() {
   const snapshot = await compraRef.collection('produtos').get();
   products = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+
+  // Ordena a lista em ordem alfabética e move os produtos "pegos" para o final
+  products = products.sort((a, b) => {
+    if (a.pego === b.pego) {
+      return a.name.localeCompare(b.name); // Ordena alfabeticamente quando os status são iguais
+    }
+    return a.pego ? 1 : -1; // Move os produtos "pegos" para o final
+  });
+
   updateUI();
 }
 
@@ -258,6 +276,15 @@ productForm.addEventListener('submit', async e => {
 
   const docRef = await compraRef.collection('produtos').add(produto);
   products.push({ ...produto, docId: docRef.id, pego: false });
+
+  // Ordena a lista ao adicionar o novo produto
+  products = products.sort((a, b) => {
+    if (a.pego === b.pego) {
+      return a.name.localeCompare(b.name); // Ordena alfabeticamente
+    }
+    return a.pego ? 1 : -1; // Move os produtos "pegos" para o final
+  });
+
   updateUI();
 
   productForm.reset();
@@ -271,6 +298,15 @@ async function removerProduto(docId, index) {
 
   await compraRef.collection('produtos').doc(docId).delete();
   products.splice(index, 1);
+
+  // Ordena a lista após remover o produto
+  products = products.sort((a, b) => {
+    if (a.pego === b.pego) {
+      return a.name.localeCompare(b.name); // Ordena alfabeticamente
+    }
+    return a.pego ? 1 : -1; // Move os produtos "pegos" para o final
+  });
+
   updateUI();
 }
 
@@ -326,6 +362,7 @@ startForm.addEventListener('submit', async e => {
     alert("Erro ao buscar ou criar compra: " + err.message);
   }
 });
+
 
 </script>
 </body>

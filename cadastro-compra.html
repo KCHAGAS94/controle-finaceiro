@@ -117,6 +117,24 @@
     .edit-btn:hover {
       background-color: #e67e22;
     }
+
+    .search {
+      max-width: 600px;
+      margin: 20px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .search input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      box-sizing: border-box;
+    }
   </style>
 </head>
 <body>
@@ -154,12 +172,10 @@
     <button type="submit">Adicionar Produto</button>
   </form>
 
-  <form id="productForm">
-    <label for="">Procurar produto:</label>
-    <input type="text" id="" required />
-
-    <button type="submit">Adicionar Produto</button>
-  </form>
+  <div class="search">
+    <label for="searchInput">Procurar produto:</label>
+    <input type="text" id="searchInput" placeholder="Pesquisar produto..." />
+  </div>
 
   <h1>Lista de compra</h1>
 
@@ -190,11 +206,12 @@
   const summary = document.getElementById('summary');
   const productForm = document.getElementById('productForm');
   const productsTableBody = document.querySelector('#productsTable tbody');
+  const searchInput = document.getElementById('searchInput');
 
   let products = [];
   let compraId = null;
   let compraRef = null;
-  let productToEdit = null; // Variável para armazenar o produto que será editado
+  let productToEdit = null;
 
   // Função para atualizar o status do produto
   async function atualizarStatusProduto(produto, checked, index) {
@@ -202,12 +219,8 @@
       pego: checked
     });
 
-    // Atualiza o estado do produto na lista
     products[index].pego = checked;
-
-    // Ordena a lista de produtos (primeiro os não marcados, depois os marcados)
     ordenarProdutos();
-
     updateUI();
   }
 
@@ -215,13 +228,13 @@
   function ordenarProdutos() {
     products = products.sort((a, b) => {
       if (a.pego === b.pego) {
-        return a.name.localeCompare(b.name); // Ordena alfabeticamente quando os status são iguais
+        return a.name.localeCompare(b.name);
       }
-      return a.pego ? 1 : -1; // Move os produtos "pegos" para o final
+      return a.pego ? 1 : -1;
     });
   }
 
-  // Função para adicionar um produto na tabela
+  // Função para adicionar produto na tabela
   function adicionarNaTabela(produto, index) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -256,7 +269,6 @@
     products.forEach((prod, index) => {
       total += prod.totalPrice;
       count += prod.quantity;
-
       adicionarNaTabela(prod, index);
     });
 
@@ -267,24 +279,21 @@
   async function loadExistingProducts() {
     const snapshot = await compraRef.collection('produtos').get();
     products = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-
-    // Ordena a lista em ordem alfabética e move os produtos "pegos" para o final
     ordenarProdutos();
-
     updateUI();
   }
 
-  // Função para editar um produto
+  // Função para editar produto
   function editarProduto(index) {
-    productToEdit = products[index]; // Armazena o produto selecionado para edição
+    productToEdit = products[index];
     document.getElementById('productName').value = productToEdit.name;
     document.getElementById('brand').value = productToEdit.brand;
     document.getElementById('quantity').value = productToEdit.quantity;
     document.getElementById('unitPrice').value = productToEdit.unitPrice.toFixed(2).replace('.', ',');
-    document.querySelector('button[type="submit"]').textContent = 'Alterar Produto'; // Muda o texto do botão para "Alterar Produto"
+    document.querySelector('button[type="submit"]').textContent = 'Alterar Produto';
   }
 
-  // Função para adicionar ou alterar o produto
+  // Função para adicionar ou alterar produto
   productForm.addEventListener('submit', async e => {
     e.preventDefault();
 
@@ -305,20 +314,16 @@
     const produto = { name, brand, quantity, unitPrice, totalPrice };
 
     if (productToEdit) {
-      // Se estamos editando um produto, atualizamos no Firestore
       await compraRef.collection('produtos').doc(productToEdit.docId).update(produto);
-      products[products.indexOf(productToEdit)] = { ...produto, docId: productToEdit.docId }; // Atualiza o produto na lista
-      productToEdit = null; // Limpa a variável de edição
-      document.querySelector('button[type="submit"]').textContent = 'Adicionar Produto'; // Restaura o texto do botão
+      products[products.indexOf(productToEdit)] = { ...produto, docId: productToEdit.docId };
+      productToEdit = null;
+      document.querySelector('button[type="submit"]').textContent = 'Adicionar Produto';
     } else {
-      // Se estamos adicionando um novo produto
       const docRef = await compraRef.collection('produtos').add(produto);
       products.push({ ...produto, docId: docRef.id });
     }
 
-    // Ordena a lista ao adicionar ou editar o produto
     ordenarProdutos();
-
     updateUI();
 
     productForm.reset();
@@ -326,31 +331,28 @@
     document.getElementById('unitPrice').value = '0.00';
   });
 
-  // Função para remover um produto
+  // Função para remover produto
   async function removerProduto(docId, index) {
     if (!confirm("Deseja realmente excluir este produto?")) return;
 
     await compraRef.collection('produtos').doc(docId).delete();
     products.splice(index, 1);
-
-    // Ordena a lista após remover o produto
     ordenarProdutos();
-
     updateUI();
   }
 
-  // Evento para formatar o valor unitário no formato correto
-  const unitPriceInput = document.getElementById('unitPrice');
-
-  unitPriceInput.addEventListener('input', () => {
-    let value = unitPriceInput.value.replace(/\D/g, ''); // Remove tudo que não for número
-    value = value.padStart(3, '0'); // Garante pelo menos 3 dígitos (ex: 001)
-    const cents = value.slice(-2);
-    const reais = value.slice(0, -2);
-    unitPriceInput.value = `${parseInt(reais, 10)}${reais.length ? ',' : ''}${cents}`;
+  // Função para procurar produto
+  searchInput.addEventListener('input', () => {
+    const searchTerm = searchInput.value.toLowerCase();
+    const filteredProducts = products.filter(prod => 
+      prod.name.toLowerCase().includes(searchTerm) || 
+      prod.brand.toLowerCase().includes(searchTerm)
+    );
+    productsTableBody.innerHTML = '';
+    filteredProducts.forEach((prod, index) => adicionarNaTabela(prod, index));
   });
 
-  // Lógica para inicializar a compra e carregar os produtos existentes
+  // Lógica para inicializar a compra e carregar produtos existentes
   startForm.addEventListener('submit', async e => {
     e.preventDefault();
 

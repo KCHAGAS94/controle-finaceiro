@@ -148,6 +148,7 @@
   <table id="productsTable">
     <thead>
       <tr>
+        <th>Status</th>
         <th>Produto</th>
         <th>Marca</th>
         <th>Quantidade</th>
@@ -167,129 +168,164 @@
 
 <script>
   const startForm = document.getElementById('startForm');
-  const mainApp = document.getElementById('mainApp');
-  const summary = document.getElementById('summary');
-  const productForm = document.getElementById('productForm');
-  const productsTableBody = document.querySelector('#productsTable tbody');
+const mainApp = document.getElementById('mainApp');
+const summary = document.getElementById('summary');
+const productForm = document.getElementById('productForm');
+const productsTableBody = document.querySelector('#productsTable tbody');
 
-  let products = [];
-  let compraId = null;
-  let compraRef = null;
+let products = [];
+let compraId = null;
+let compraRef = null;
 
-  startForm.addEventListener('submit', async e => {
-    e.preventDefault();
-    const date = document.getElementById('date').value;
-    const market = document.getElementById('market').value.trim();
+// Lógica para validar o status do produto
+async function atualizarStatusProduto(produto, checked, index) {
+  // Atualiza o produto no Firestore
+  await compraRef.collection('produtos').doc(produto.docId).update({
+    pego: checked
+  });
+  
+  // Atualiza o estado do produto na lista
+  products[index].pego = checked;
+  updateUI();
+}
 
-    if (!date || !market) {
-      alert("Preencha todos os campos.");
-      return;
-    }
-
-    try {
-      const snapshot = await db.collection('compras')
-        .where('date', '==', date)
-        .where('market', '==', market)
-        .limit(1)
-        .get();
-
-      if (!snapshot.empty) {
-        const doc = snapshot.docs[0];
-        compraId = doc.id;
-        compraRef = db.collection('compras').doc(compraId);
-        loadExistingProducts();
-      } else {
-        const docRef = await db.collection('compras').add({
-          date,
-          market,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        compraId = docRef.id;
-        compraRef = docRef;
-      }
-
-      startForm.classList.add('hidden');
-      mainApp.classList.remove('hidden');
-
-    } catch (err) {
-      alert("Erro ao buscar ou criar compra: " + err.message);
-    }
+// Função para adicionar um produto na tabela
+function adicionarNaTabela(produto, index) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>
+      <input type="checkbox" class="status" data-index="${index}" ${produto.pego ? 'checked' : ''} />
+    </td>
+    <td>${produto.name}</td>
+    <td>${produto.brand}</td>
+    <td>${produto.quantity}</td>
+    <td>R$ ${produto.unitPrice.toFixed(2)}</td>
+    <td>R$ ${produto.totalPrice.toFixed(2)}</td>
+    <td><button class="delete-btn" onclick="removerProduto('${produto.docId}', ${index})">Excluir</button></td>
+  `;
+  
+  // Adiciona evento para atualizar status do produto
+  tr.querySelector('.status').addEventListener('change', (e) => {
+    const checked = e.target.checked;
+    atualizarStatusProduto(produto, checked, index);
   });
 
-  async function loadExistingProducts() {
-    const snapshot = await compraRef.collection('produtos').get();
-    products = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-    updateUI();
-  }
+  productsTableBody.appendChild(tr);
+}
 
-  productForm.addEventListener('submit', async e => {
-    e.preventDefault();
+// Função para atualizar a tabela
+function updateUI() {
+  productsTableBody.innerHTML = '';
+  let total = 0;
+  let count = 0;
 
-    if (!compraId) return;
+  products.forEach((prod, index) => {
+    total += prod.totalPrice;
+    count += prod.quantity;
 
-    const name = document.getElementById('productName').value.trim();
-    const brand = document.getElementById('brand').value.trim();
-    const quantity = parseInt(document.getElementById('quantity').value);
-    const unitPriceRaw = document.getElementById('unitPrice').value.replace(/\./g, '').replace(',', '.');
-    const unitPrice = parseFloat(unitPriceRaw);
-    if (!name || !brand || quantity <= 0 || unitPrice <= 0) {
-      alert("Campos inválidos.");
-      return;
-    }
-
-    const totalPrice = quantity * unitPrice;
-    const produto = { name, brand, quantity, unitPrice, totalPrice };
-
-    const docRef = await compraRef.collection('produtos').add(produto);
-    products.push({ ...produto, docId: docRef.id });
-    updateUI();
-
-    productForm.reset();
-    document.getElementById('quantity').value = 1;
-    document.getElementById('unitPrice').value = '0.00';
+    adicionarNaTabela(prod, index);
   });
 
-  async function removerProduto(docId, index) {
-    if (!confirm("Deseja realmente excluir este produto?")) return;
+  summary.textContent = `Produtos adicionados: ${count} | Valor total: R$ ${total.toFixed(2)}`;
+}
 
-    await compraRef.collection('produtos').doc(docId).delete();
-    products.splice(index, 1);
-    updateUI();
+// Lógica para carregar produtos existentes
+async function loadExistingProducts() {
+  const snapshot = await compraRef.collection('produtos').get();
+  products = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+  updateUI();
+}
+
+// Lógica para adicionar novo produto
+productForm.addEventListener('submit', async e => {
+  e.preventDefault();
+
+  if (!compraId) return;
+
+  const name = document.getElementById('productName').value.trim();
+  const brand = document.getElementById('brand').value.trim();
+  const quantity = parseInt(document.getElementById('quantity').value);
+  const unitPriceRaw = document.getElementById('unitPrice').value.replace(/\./g, '').replace(',', '.');
+  const unitPrice = parseFloat(unitPriceRaw);
+
+  if (!name || !brand || quantity <= 0 || unitPrice <= 0) {
+    alert("Campos inválidos.");
+    return;
   }
 
-  function updateUI() {
-    productsTableBody.innerHTML = '';
-    let total = 0;
-    let count = 0;
+  const totalPrice = quantity * unitPrice;
+  const produto = { name, brand, quantity, unitPrice, totalPrice };
 
-    products.forEach((prod, index) => {
-      total += prod.totalPrice;
-      count += prod.quantity;
+  const docRef = await compraRef.collection('produtos').add(produto);
+  products.push({ ...produto, docId: docRef.id, pego: false });
+  updateUI();
 
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${prod.name}</td>
-        <td>${prod.brand}</td>
-        <td>${prod.quantity}</td>
-        <td>R$ ${prod.unitPrice.toFixed(2)}</td>
-        <td>R$ ${prod.totalPrice.toFixed(2)}</td>
-        <td><button class="delete-btn" onclick="removerProduto('${prod.docId}', ${index})">Excluir</button></td>
-      `;
-      productsTableBody.appendChild(tr);
-    });
+  productForm.reset();
+  document.getElementById('quantity').value = 1;
+  document.getElementById('unitPrice').value = '0.00';
+});
 
-    summary.textContent = `Produtos adicionados: ${count} | Valor total: R$ ${total.toFixed(2)}`;
+// Lógica para remover produto
+async function removerProduto(docId, index) {
+  if (!confirm("Deseja realmente excluir este produto?")) return;
+
+  await compraRef.collection('produtos').doc(docId).delete();
+  products.splice(index, 1);
+  updateUI();
+}
+
+// Evento para formatar o valor unitário no formato correto
+const unitPriceInput = document.getElementById('unitPrice');
+
+unitPriceInput.addEventListener('input', () => {
+  let value = unitPriceInput.value.replace(/\D/g, ''); // Remove tudo que não for número
+  value = value.padStart(3, '0'); // Garante pelo menos 3 dígitos (ex: 001)
+  const cents = value.slice(-2);
+  const reais = value.slice(0, -2);
+  unitPriceInput.value = `${parseInt(reais, 10)}${reais.length ? ',' : ''}${cents}`;
+});
+
+// Lógica para inicializar a compra e carregar os produtos existentes
+startForm.addEventListener('submit', async e => {
+  e.preventDefault();
+
+  const date = document.getElementById('date').value;
+  const market = document.getElementById('market').value.trim();
+
+  if (!date || !market) {
+    alert("Preencha todos os campos.");
+    return;
   }
 
-      const unitPriceInput = document.getElementById('unitPrice');
+  try {
+    const snapshot = await db.collection('compras')
+      .where('date', '==', date)
+      .where('market', '==', market)
+      .limit(1)
+      .get();
 
-    unitPriceInput.addEventListener('input', () => {
-      let value = unitPriceInput.value.replace(/\D/g, ''); // Remove tudo que não for número
-      value = value.padStart(3, '0'); // Garante pelo menos 3 dígitos (ex: 001)
-      const cents = value.slice(-2);
-      const reais = value.slice(0, -2);
-      unitPriceInput.value = `${parseInt(reais, 10)}${reais.length ? ',' : ''}${cents}`;
-    });
+    if (!snapshot.empty) {
+      const doc = snapshot.docs[0];
+      compraId = doc.id;
+      compraRef = db.collection('compras').doc(compraId);
+      loadExistingProducts();
+    } else {
+      const docRef = await db.collection('compras').add({
+        date,
+        market,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      compraId = docRef.id;
+      compraRef = docRef;
+    }
+
+    startForm.classList.add('hidden');
+    mainApp.classList.remove('hidden');
+
+  } catch (err) {
+    alert("Erro ao buscar ou criar compra: " + err.message);
+  }
+});
 
 </script>
 </body>

@@ -91,22 +91,31 @@
       color: white;
     }
 
-    .delete-btn {
-      /* background: none;
-      border: none;
-      color: red;
-      font-size: 18px;
-      cursor: pointer; */
+    .delete-btn, .edit-btn {
       margin-top: 10px;
-      background-color: #e74c3c;
-      color: white;
       padding: 6px 12px;
-      border: none;
       border-radius: 4px;
       cursor: pointer;
     }
+
+    .delete-btn {
+      background-color: #e74c3c;
+      color: white;
+      border: none;
+    }
+
     .delete-btn:hover {
       background-color: #c0392b;
+    }
+
+    .edit-btn {
+      background-color: #f39c12;
+      color: white;
+      border: none;
+    }
+
+    .edit-btn:hover {
+      background-color: #e67e22;
     }
   </style>
 </head>
@@ -145,6 +154,15 @@
     <button type="submit">Adicionar Produto</button>
   </form>
 
+  <form id="productForm">
+    <label for="">Procurar produto:</label>
+    <input type="text" id="" required />
+
+    <button type="submit">Adicionar Produto</button>
+  </form>
+
+  <h1>Lista de compra</h1>
+
   <table id="productsTable">
     <thead>
       <tr>
@@ -168,202 +186,211 @@
 
 <script>
   const startForm = document.getElementById('startForm');
-const mainApp = document.getElementById('mainApp');
-const summary = document.getElementById('summary');
-const productForm = document.getElementById('productForm');
-const productsTableBody = document.querySelector('#productsTable tbody');
+  const mainApp = document.getElementById('mainApp');
+  const summary = document.getElementById('summary');
+  const productForm = document.getElementById('productForm');
+  const productsTableBody = document.querySelector('#productsTable tbody');
 
-let products = [];
-let compraId = null;
-let compraRef = null;
+  let products = [];
+  let compraId = null;
+  let compraRef = null;
+  let productToEdit = null; // Variável para armazenar o produto que será editado
 
-// Lógica para validar o status do produto
-async function atualizarStatusProduto(produto, checked, index) {
-  // Atualiza o produto no Firestore
-  await compraRef.collection('produtos').doc(produto.docId).update({
-    pego: checked
-  });
+  // Função para atualizar o status do produto
+  async function atualizarStatusProduto(produto, checked, index) {
+    await compraRef.collection('produtos').doc(produto.docId).update({
+      pego: checked
+    });
 
-  // Atualiza o estado do produto na lista
-  products[index].pego = checked;
+    // Atualiza o estado do produto na lista
+    products[index].pego = checked;
 
-  // Ordena a lista de produtos (primeiro os não marcados, depois os marcados)
-  products = products.sort((a, b) => {
-    if (a.pego === b.pego) {
-      return a.name.localeCompare(b.name); // Ordena alfabeticamente quando os status são iguais
-    }
-    return a.pego ? 1 : -1; // Move os produtos "pegos" para o final
-  });
+    // Ordena a lista de produtos (primeiro os não marcados, depois os marcados)
+    ordenarProdutos();
 
-  updateUI();
-}
-
-// Função para adicionar um produto na tabela
-function adicionarNaTabela(produto, index) {
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td>
-      <input type="checkbox" class="status" data-index="${index}" ${produto.pego ? 'checked' : ''} />
-    </td>
-    <td>${produto.name}</td>
-    <td>${produto.brand}</td>
-    <td>${produto.quantity}</td>
-    <td>R$ ${produto.unitPrice.toFixed(2)}</td>
-    <td>R$ ${produto.totalPrice.toFixed(2)}</td>
-    <td><button class="delete-btn" onclick="removerProduto('${produto.docId}', ${index})">Excluir</button></td>
-  `;
-
-  // Adiciona evento para atualizar status do produto
-  tr.querySelector('.status').addEventListener('change', (e) => {
-    const checked = e.target.checked;
-    atualizarStatusProduto(produto, checked, index);
-  });
-
-  productsTableBody.appendChild(tr);
-}
-
-// Função para atualizar a tabela
-function updateUI() {
-  productsTableBody.innerHTML = '';
-  let total = 0;
-  let count = 0;
-
-  products.forEach((prod, index) => {
-    total += prod.totalPrice;
-    count += prod.quantity;
-
-    adicionarNaTabela(prod, index);
-  });
-
-  summary.textContent = `Produtos adicionados: ${count} | Valor total: R$ ${total.toFixed(2)}`;
-}
-
-// Lógica para carregar produtos existentes
-async function loadExistingProducts() {
-  const snapshot = await compraRef.collection('produtos').get();
-  products = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-
-  // Ordena a lista em ordem alfabética e move os produtos "pegos" para o final
-  products = products.sort((a, b) => {
-    if (a.pego === b.pego) {
-      return a.name.localeCompare(b.name); // Ordena alfabeticamente quando os status são iguais
-    }
-    return a.pego ? 1 : -1; // Move os produtos "pegos" para o final
-  });
-
-  updateUI();
-}
-
-// Lógica para adicionar novo produto
-productForm.addEventListener('submit', async e => {
-  e.preventDefault();
-
-  if (!compraId) return;
-
-  const name = document.getElementById('productName').value.trim();
-  const brand = document.getElementById('brand').value.trim();
-  const quantity = parseInt(document.getElementById('quantity').value);
-  const unitPriceRaw = document.getElementById('unitPrice').value.replace(/\./g, '').replace(',', '.');
-  const unitPrice = parseFloat(unitPriceRaw);
-
-  if (!name || !brand || quantity <= 0 || unitPrice <= 0) {
-    alert("Campos inválidos.");
-    return;
+    updateUI();
   }
 
-  const totalPrice = quantity * unitPrice;
-  const produto = { name, brand, quantity, unitPrice, totalPrice };
-
-  const docRef = await compraRef.collection('produtos').add(produto);
-  products.push({ ...produto, docId: docRef.id, pego: false });
-
-  // Ordena a lista ao adicionar o novo produto
-  products = products.sort((a, b) => {
-    if (a.pego === b.pego) {
-      return a.name.localeCompare(b.name); // Ordena alfabeticamente
-    }
-    return a.pego ? 1 : -1; // Move os produtos "pegos" para o final
-  });
-
-  updateUI();
-
-  productForm.reset();
-  document.getElementById('quantity').value = 1;
-  document.getElementById('unitPrice').value = '0.00';
-});
-
-// Lógica para remover produto
-async function removerProduto(docId, index) {
-  if (!confirm("Deseja realmente excluir este produto?")) return;
-
-  await compraRef.collection('produtos').doc(docId).delete();
-  products.splice(index, 1);
-
-  // Ordena a lista após remover o produto
-  products = products.sort((a, b) => {
-    if (a.pego === b.pego) {
-      return a.name.localeCompare(b.name); // Ordena alfabeticamente
-    }
-    return a.pego ? 1 : -1; // Move os produtos "pegos" para o final
-  });
-
-  updateUI();
-}
-
-// Evento para formatar o valor unitário no formato correto
-const unitPriceInput = document.getElementById('unitPrice');
-
-unitPriceInput.addEventListener('input', () => {
-  let value = unitPriceInput.value.replace(/\D/g, ''); // Remove tudo que não for número
-  value = value.padStart(3, '0'); // Garante pelo menos 3 dígitos (ex: 001)
-  const cents = value.slice(-2);
-  const reais = value.slice(0, -2);
-  unitPriceInput.value = `${parseInt(reais, 10)}${reais.length ? ',' : ''}${cents}`;
-});
-
-// Lógica para inicializar a compra e carregar os produtos existentes
-startForm.addEventListener('submit', async e => {
-  e.preventDefault();
-
-  const date = document.getElementById('date').value;
-  const market = document.getElementById('market').value.trim();
-
-  if (!date || !market) {
-    alert("Preencha todos os campos.");
-    return;
+  // Função para ordenar os produtos
+  function ordenarProdutos() {
+    products = products.sort((a, b) => {
+      if (a.pego === b.pego) {
+        return a.name.localeCompare(b.name); // Ordena alfabeticamente quando os status são iguais
+      }
+      return a.pego ? 1 : -1; // Move os produtos "pegos" para o final
+    });
   }
 
-  try {
-    const snapshot = await db.collection('compras')
-      .where('date', '==', date)
-      .where('market', '==', market)
-      .limit(1)
-      .get();
+  // Função para adicionar um produto na tabela
+  function adicionarNaTabela(produto, index) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <input type="checkbox" class="status" data-index="${index}" ${produto.pego ? 'checked' : ''} />
+      </td>
+      <td>${produto.name}</td>
+      <td>${produto.brand}</td>
+      <td>${produto.quantity}</td>
+      <td>R$ ${produto.unitPrice.toFixed(2)}</td>
+      <td>R$ ${produto.totalPrice.toFixed(2)}</td>
+      <td>
+        <button class="edit-btn" onclick="editarProduto(${index})">Alterar</button>
+        <button class="delete-btn" onclick="removerProduto('${produto.docId}', ${index})">Excluir</button>
+      </td>
+    `;
 
-    if (!snapshot.empty) {
-      const doc = snapshot.docs[0];
-      compraId = doc.id;
-      compraRef = db.collection('compras').doc(compraId);
-      loadExistingProducts();
+    tr.querySelector('.status').addEventListener('change', (e) => {
+      const checked = e.target.checked;
+      atualizarStatusProduto(produto, checked, index);
+    });
+
+    productsTableBody.appendChild(tr);
+  }
+
+  // Função para atualizar a tabela
+  function updateUI() {
+    productsTableBody.innerHTML = '';
+    let total = 0;
+    let count = 0;
+
+    products.forEach((prod, index) => {
+      total += prod.totalPrice;
+      count += prod.quantity;
+
+      adicionarNaTabela(prod, index);
+    });
+
+    summary.textContent = `Produtos adicionados: ${count} | Valor total: R$ ${total.toFixed(2)}`;
+  }
+
+  // Função para carregar produtos existentes
+  async function loadExistingProducts() {
+    const snapshot = await compraRef.collection('produtos').get();
+    products = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+
+    // Ordena a lista em ordem alfabética e move os produtos "pegos" para o final
+    ordenarProdutos();
+
+    updateUI();
+  }
+
+  // Função para editar um produto
+  function editarProduto(index) {
+    productToEdit = products[index]; // Armazena o produto selecionado para edição
+    document.getElementById('productName').value = productToEdit.name;
+    document.getElementById('brand').value = productToEdit.brand;
+    document.getElementById('quantity').value = productToEdit.quantity;
+    document.getElementById('unitPrice').value = productToEdit.unitPrice.toFixed(2).replace('.', ',');
+    document.querySelector('button[type="submit"]').textContent = 'Alterar Produto'; // Muda o texto do botão para "Alterar Produto"
+  }
+
+  // Função para adicionar ou alterar o produto
+  productForm.addEventListener('submit', async e => {
+    e.preventDefault();
+
+    if (!compraId) return;
+
+    const name = document.getElementById('productName').value.trim();
+    const brand = document.getElementById('brand').value.trim();
+    const quantity = parseInt(document.getElementById('quantity').value);
+    const unitPriceRaw = document.getElementById('unitPrice').value.replace(/\./g, '').replace(',', '.');
+    const unitPrice = parseFloat(unitPriceRaw);
+
+    if (!name || !brand || quantity <= 0 || unitPrice <= 0) {
+      alert("Campos inválidos.");
+      return;
+    }
+
+    const totalPrice = quantity * unitPrice;
+    const produto = { name, brand, quantity, unitPrice, totalPrice };
+
+    if (productToEdit) {
+      // Se estamos editando um produto, atualizamos no Firestore
+      await compraRef.collection('produtos').doc(productToEdit.docId).update(produto);
+      products[products.indexOf(productToEdit)] = { ...produto, docId: productToEdit.docId }; // Atualiza o produto na lista
+      productToEdit = null; // Limpa a variável de edição
+      document.querySelector('button[type="submit"]').textContent = 'Adicionar Produto'; // Restaura o texto do botão
     } else {
-      const docRef = await db.collection('compras').add({
-        date,
-        market,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      compraId = docRef.id;
-      compraRef = docRef;
+      // Se estamos adicionando um novo produto
+      const docRef = await compraRef.collection('produtos').add(produto);
+      products.push({ ...produto, docId: docRef.id });
     }
 
-    startForm.classList.add('hidden');
-    mainApp.classList.remove('hidden');
+    // Ordena a lista ao adicionar ou editar o produto
+    ordenarProdutos();
 
-  } catch (err) {
-    alert("Erro ao buscar ou criar compra: " + err.message);
+    updateUI();
+
+    productForm.reset();
+    document.getElementById('quantity').value = 1;
+    document.getElementById('unitPrice').value = '0.00';
+  });
+
+  // Função para remover um produto
+  async function removerProduto(docId, index) {
+    if (!confirm("Deseja realmente excluir este produto?")) return;
+
+    await compraRef.collection('produtos').doc(docId).delete();
+    products.splice(index, 1);
+
+    // Ordena a lista após remover o produto
+    ordenarProdutos();
+
+    updateUI();
   }
-});
 
+  // Evento para formatar o valor unitário no formato correto
+  const unitPriceInput = document.getElementById('unitPrice');
 
+  unitPriceInput.addEventListener('input', () => {
+    let value = unitPriceInput.value.replace(/\D/g, ''); // Remove tudo que não for número
+    value = value.padStart(3, '0'); // Garante pelo menos 3 dígitos (ex: 001)
+    const cents = value.slice(-2);
+    const reais = value.slice(0, -2);
+    unitPriceInput.value = `${parseInt(reais, 10)}${reais.length ? ',' : ''}${cents}`;
+  });
+
+  // Lógica para inicializar a compra e carregar os produtos existentes
+  startForm.addEventListener('submit', async e => {
+    e.preventDefault();
+
+    const date = document.getElementById('date').value;
+    const market = document.getElementById('market').value.trim();
+
+    if (!date || !market) {
+      alert("Preencha todos os campos.");
+      return;
+    }
+
+    try {
+      const snapshot = await db.collection('compras')
+        .where('date', '==', date)
+        .where('market', '==', market)
+        .limit(1)
+        .get();
+
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        compraId = doc.id;
+        compraRef = db.collection('compras').doc(compraId);
+        loadExistingProducts();
+      } else {
+        const docRef = await db.collection('compras').add({
+          date,
+          market,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        compraId = docRef.id;
+        compraRef = docRef;
+      }
+
+      startForm.classList.add('hidden');
+      mainApp.classList.remove('hidden');
+
+    } catch (err) {
+      alert("Erro ao buscar ou criar compra: " + err.message);
+    }
+  });
 </script>
 </body>
 </html>

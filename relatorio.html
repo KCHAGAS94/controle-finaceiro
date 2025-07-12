@@ -5,18 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Relatório de Compras</title>
   <style>
+    /* Seu CSS aqui, igual ao seu código original */
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
       background: #f4f4f4;
       color: #333;
     }
-
     h1 {
       text-align: center;
       color: #2c3e50;
     }
-
     .card {
       background: #fff;
       padding: 20px;
@@ -25,24 +24,20 @@
       margin: 20px auto;
       max-width: 800px;
     }
-
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 10px;
     }
-
     th, td {
       padding: 10px;
       border-bottom: 1px solid #ddd;
       text-align: left;
     }
-
     th {
       background-color: #27ae60;
       color: white;
     }
-
     .delete-btn {
       margin-top: 10px;
       background-color: #e74c3c;
@@ -52,7 +47,6 @@
       border-radius: 4px;
       cursor: pointer;
     }
-
     .delete-btn:hover {
       background-color: #c0392b;
     }
@@ -71,19 +65,31 @@
   <script>
     const container = document.getElementById('comprasContainer');
 
-    firebase.firestore().collection("compras").orderBy("createdAt", "desc").get()
-      .then(snapshot => {
+    async function carregarCompras() {
+      try {
+        const snapshot = await db.collection("compras").orderBy("createdAt", "desc").get();
         if (snapshot.empty) {
-          container.innerHTML = "<h1>Nenhuma compra encontrada.</h1>";
+          container.innerHTML = "<h3>Nenhuma compra encontrada.</h3>";
           return;
         }
 
-        container.innerHTML = ''; // Limpa a mensagem de "Carregando..."
+        container.innerHTML = '';
 
-        snapshot.forEach(doc => {
+        // Vamos usar Promise.all para aguardar todos os produtos serem carregados
+        const comprasComProdutos = await Promise.all(snapshot.docs.map(async doc => {
           const data = doc.data();
-          const produtos = data.produtos || [];
-          const total = produtos.reduce((acc, p) => acc + p.totalPrice, 0);
+          const compraId = doc.id;
+
+          // Busca produtos na subcoleção produtos
+          const produtosSnap = await db.collection("compras").doc(compraId).collection("produtos").get();
+          const produtos = produtosSnap.docs.map(prodDoc => prodDoc.data());
+
+          return { compraId, data, produtos };
+        }));
+
+        // Agora monta o HTML
+        comprasComProdutos.forEach(({ compraId, data, produtos }) => {
+          let total = produtos.reduce((acc, p) => acc + p.totalPrice, 0);
 
           const div = document.createElement("div");
           div.classList.add("card");
@@ -123,20 +129,21 @@
               </tbody>
             </table>
             <p><strong>Total da compra: R$ ${total.toFixed(2)}</strong></p>
-            <button class="delete-btn" onclick="excluirCompra('${doc.id}')">Excluir</button>
+            <button class="delete-btn" onclick="excluirCompra('${compraId}')">Excluir compra</button>
           `;
 
           div.innerHTML = tableHTML;
           container.appendChild(div);
         });
-      })
-      .catch(err => {
+
+      } catch (err) {
         container.innerHTML = `<p>Erro ao carregar compras: ${err.message}</p>`;
-      });
+      }
+    }
 
     function excluirCompra(id) {
       if (confirm("Tem certeza que deseja excluir esta compra?")) {
-        firebase.firestore().collection("compras").doc(id).delete()
+        db.collection("compras").doc(id).delete()
           .then(() => {
             alert("Compra excluída com sucesso.");
             location.reload();
@@ -146,7 +153,9 @@
           });
       }
     }
-  </script>
 
+    carregarCompras();
+    console.log("Documentos de compras:", snapshot.docs);
+  </script>
 </body>
 </html>

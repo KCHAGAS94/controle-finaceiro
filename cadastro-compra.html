@@ -168,8 +168,6 @@
   <div class="search">
     <label for="searchInput">Procurar produto:</label>
     <input type="text" id="searchInput" placeholder="Pesquisar produto..." />
-
-    <button type="submit">Adicionar Produto</button>
   </div>
 
   <h1>Lista de compra</h1>
@@ -389,6 +387,30 @@
       alert("Erro ao buscar ou criar compra: " + err.message);
     }
   });
+
+  searchInput.addEventListener('input', () => {
+  const termo = searchInput.value.trim().toLowerCase();
+  const produtosFiltrados = termo
+    ? products.filter(prod => prod.name.toLowerCase().includes(termo))
+    : products;
+
+  updateUI(produtosFiltrados);
+});
+
+function updateUI(produtosParaExibir = products) {
+  productsTableBody.innerHTML = '';
+  let total = 0;
+  let count = 0;
+
+  produtosParaExibir.forEach((prod, index) => {
+    total += prod.totalPrice;
+    count += prod.quantity;
+    adicionarNaTabela(prod, products.indexOf(prod)); // usa índice do array principal
+  });
+
+  summary.textContent = `Produtos adicionados: ${count} | Valor total: R$ ${total.toFixed(2)}`;
+}
+
 </script>
 
 </body>
